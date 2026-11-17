@@ -1,0 +1,133 @@
+{
+ "roads": [
+  "north",
+  "east",
+  "south",
+  "west"
+ ],
+ "fps": 15.0,
+ "seconds": 150.0,
+ "mode": "adaptive",
+ "vehicles_counted": {
+  "north": 66,
+  "east": 33,
+  "south": 20,
+  "west": 9
+ },
+ "cycles": [
+  {
+   "number": 1,
+   "counts": [
+    30,
+    11,
+    3,
+    5
+   ],
+   "greens": [
+    10.0,
+    10.0,
+    10.0,
+    10.0
+   ],
+   "started": 0.0
+  },
+  {
+   "number": 2,
+   "counts": [
+    28,
+    17,
+    11,
+    3
+   ],
+   "greens": [
+    20,
+    9,
+    5,
+    5
+   ],
+   "started": 60.53
+  },
+  {
+   "number": 3,
+   "counts": [
+    8,
+    5,
+    6,
+    1
+   ],
+   "greens": [
+    19,
+    12,
+    7,
+    5
+   ],
+   "started": 136.73
+  }
+ ],
+ "events": [
+  {
+   "t": 60.53,
+   "kind": "cycle",
+   "text": "Cycle 2: counted [30, 11, 3, 5] -> greens [20, 9, 5, 5] s"
+  },
+  {
+   "t": 75.27,
+   "kind": "emergency",
+   "text": "Siren on east: clearing the junction for the ambulance"
+  },
+  {
+   "t": 87.0,
+   "kind": "emergency",
+   "text": "Siren gone on east: normal timing resumes"
+  },
+  {
+   "t": 136.73,
+   "kind": "cycle",
+   "text": "Cycle 3: counted [28, 17, 11, 3] -> greens [19, 12, 7, 5] s"
+  }
+ ],
+ "siren": {
+  "road": "east",
+  "intervals": [
+   [
+    75.25,
+    87.0
+   ]
+  ]
+ },
+ "config": {
+  "detector": {
+   "width": 480,
+   "blur": 5,
+   "history": 300,
+   "var_threshold": 24,
+   "detect_shadows": true,
+   "min_area": 120,
+   "open_kernel": 3,
+   "dilate_kernel": 5
+  },
+  "counter": {
+   "line": 0.6,
+   "direction": "down",
+   "max_jump": 0.12,
+   "keep_for": 8
+  },
+  "signal": {
+   "cycle": 40.0,
+   "min_green": 5.0,
+   "max_green": 20.0,
+   "yellow": 3,
+   "all_red": 2,
+   "first_green": 10.0
+  },
+  "siren": {
+   "band": [
+    600.0,
+    1600.0
+   ],
+   "window": 0.25,
+   "ratio": 4.0,
+   "hold": 0.8
+  }
+ }
+}

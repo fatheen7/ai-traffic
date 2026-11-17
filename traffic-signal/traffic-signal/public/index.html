@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Traffic Management System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Python and OpenCV count vehicles from four roadside cameras, busier roads get longer greens, and an FFT siren detector gives ambulances priority.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;500;600;700;800&family=Overpass+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-repo="">
+<!--BODY-->
+<header class="top">
+  <div class="wrap top-in">
+    <a class="back" href="https://muhammadfatheen.com">Muhammad Fatheen</a>
+    <div class="top-right">
+      <a class="repo-link" id="repo-link" hidden>Code on GitHub</a>
+      <button type="button" id="theme-btn" class="pill">Light</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="intro">
+    <p class="eyebrow">Project · Jan – Apr 2025 · Team of 4</p>
+    <h1>AI Traffic Management System</h1>
+    <p class="lede">Fixed timers give an empty road the same green as a full one. This system watches each road with a camera, counts the vehicles with OpenCV, and shares the green time by demand. When a microphone picks up an ambulance siren, it clears the way.</p>
+    <ul class="facts">
+      <li>Presented at Universiti Sains Islam Malaysia, Kuala Lumpur</li>
+      <li>Python · OpenCV · NumPy · FastAPI</li>
+      <li>My part: the signal logic and the pitch</li>
+    </ul>
+    <p class="note">A working rebuild of our competition project: a Python package, a test suite, and the web API this page calls.</p>
+  </section>
+
+  <section class="block" aria-labelledby="run-h">
+    <div class="sec-head">
+      <h2 id="run-h">See it run</h2>
+      <p>Output of <code>python -m traffic junction</code> on four approach videos and one microphone recording. Each tile is a camera: green boxes are vehicles OpenCV found, the yellow line is where they are counted, and the inset is the foreground mask. The bar along the bottom is the signal controller and the siren detector.</p>
+    </div>
+    <figure class="player">
+      <video id="run-video" src="media/junction.mp4" poster="media/poster.jpg" controls muted playsinline preload="metadata"></video>
+      <figcaption>Watch around 1:15, when the siren on the east road is detected and the junction switches to give it green. The sample footage is synthetic, so the true counts are known; recorded clips go in with one command.</figcaption>
+    </figure>
+
+    <div class="two">
+      <div class="card">
+        <h3>Signal plan, cycle by cycle</h3>
+        <p class="hint">Each cycle's counts set the next cycle's greens. This run used a 40-second demo cycle (5 to 20 seconds per road) so several cycles fit in the clip.</p>
+        <div class="table-wrap"><table class="data" id="cycles-table"><thead><tr><th>Cycle</th><th>Starts</th><th>Green N · E · S · W (s)</th><th>Counted N · E · S · W</th></tr></thead><tbody></tbody></table></div>
+        <ol class="events" id="events"></ol>
+      </div>
+      <div class="card">
+        <h3>Counting accuracy on the sample footage</h3>
+        <p class="hint">Vehicles heading to the junction that crossed the line, against what the cameras counted.</p>
+        <div class="table-wrap"><table class="data" id="acc-table"><thead><tr><th>Road</th><th>Actual</th><th>Counted</th><th>Accuracy</th></tr></thead><tbody></tbody></table></div>
+        <p class="hint">Misses are mostly dark vehicles on dark asphalt and vehicles too close to separate. That is the main limit of background subtraction.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="api-h">
+    <div class="sec-head">
+      <div class="row-between">
+        <h2 id="api-h">Try the API</h2>
+        <span class="status" id="api-status">Checking the API…</span>
+      </div>
+      <p>These call the same Python code running on the server. Use the sample files or your own.</p>
+    </div>
+
+    <div class="tools">
+      <div class="card tool">
+        <h3>1 · Count vehicles in a video</h3>
+        <p class="hint">A fixed camera looking along a road, under 4 MB. The first 30 seconds are processed.</p>
+        <div class="controls">
+          <label class="file"><input type="file" id="count-file" accept="video/*"><span>Choose a video</span></label>
+          <button type="button" class="ghost" id="count-sample">Use the sample clip</button>
+        </div>
+        <div class="controls">
+          <label class="range">Line <input type="range" id="count-line" min="10" max="90" value="60"><output id="count-line-out">60%</output></label>
+          <label class="range">Smallest vehicle <input type="range" id="count-area" min="40" max="2000" step="20" value="120"><output id="count-area-out">120 px</output></label>
+          <label class="select">Direction
+            <select id="count-dir"><option value="down">Moving down</option><option value="up">Moving up</option><option value="both">Both</option></select>
+          </label>
+        </div>
+        <div class="result" id="count-out" hidden></div>
+      </div>
+
+      <div class="card tool">
+        <h3>2 · Turn counts into green times</h3>
+        <p class="hint">Vehicles counted on each road last cycle. 120-second cycle, 10 to 60 seconds each.</p>
+        <form class="plan-form" id="plan-form">
+          <label>North <input type="number" id="pn" min="0" max="999" value="24"></label>
+          <label>East <input type="number" id="pe" min="0" max="999" value="14"></label>
+          <label>South <input type="number" id="ps" min="0" max="999" value="10"></label>
+          <label>West <input type="number" id="pw" min="0" max="999" value="2"></label>
+          <button type="submit" class="primary">Plan the cycle</button>
+        </form>
+        <div class="result" id="plan-out" hidden></div>
+      </div>
+
+      <div class="card tool">
+        <h3>3 · Listen for a siren</h3>
+        <p class="hint">A WAV recording from the roadside, under 4 MB. An FFT compares the siren band (600 to 1,600 Hz) with the rest of the sound.</p>
+        <div class="controls">
+          <label class="file"><input type="file" id="siren-file" accept=".wav,audio/wav"><span>Choose a WAV file</span></label>
+          <button type="button" class="ghost" id="siren-sample">Use the sample recording</button>
+        </div>
+        <audio id="siren-audio" controls hidden></audio>
+        <div class="result" id="siren-out" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="code-h">
+    <div class="sec-head">
+      <h2 id="code-h">How the code works</h2>
+      <p>Four small modules, each tested on its own, joined by <code>junction.py</code>.</p>
+    </div>
+    <ol class="code-steps">
+      <li>
+        <div class="step-text"><h3>Find what moves</h3><p><code>traffic/detector.py</code> · MOG2 learns the empty road and marks anything new. Shadows come back grey, so a threshold drops them. Opening removes specks, dilation joins broken shapes, and contours outline each vehicle.</p></div>
+<pre><code>gray = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (5, 5), 0)
+fg = self.mog.apply(gray)
+_, fg = cv2.threshold(fg, 200, 255, cv2.THRESH_BINARY)   # shadows are 127
+fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, self.k_open)
+fg = cv2.dilate(fg, self.k_dilate)
+contours, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+found = [cv2.boundingRect(c) for c in contours
+         if cv2.contourArea(c) &gt;= self.cfg.min_area]</code></pre>
+      </li>
+      <li>
+        <div class="step-text"><h3>Count each vehicle once</h3><p><code>traffic/tracker.py</code> · Each centre is matched to the nearest track from the last frame. A vehicle counts when its centre crosses the line in the direction of the junction, and only once.</p></div>
+<pre><code>pairs.sort()                              # closest matches first
+for d, ti, ci in pairs:
+    ...
+    prev_y = tr.y
+    tr.x, tr.y = centres[ci]
+    if not tr.counted and prev_y &lt; self.line_y &lt;= tr.y:
+        self.down += 1                    # crossed, heading to the junction
+        tr.counted = True</code></pre>
+      </li>
+      <li>
+        <div class="step-text"><h3>Share the green</h3><p><code>traffic/signal.py</code> · Next cycle, each road's green is its share of the count, kept between a minimum and a maximum. The controller then runs green, yellow and all-red for each road in turn.</p></div>
+<pre><code>def green_times(counts, cycle=120, min_green=10, max_green=60):
+    total = sum(counts)
+    if total == 0:
+        return [round(min(max_green, max(min_green, cycle / len(counts))))] * len(counts)
+    return [round(min(max_green, max(min_green, n / total * cycle)))
+            for n in counts]
+
+green_times([24, 14, 10, 2])  # [58, 34, 24, 10]</code></pre>
+      </li>
+      <li>
+        <div class="step-text"><h3>Hear the siren</h3><p><code>traffic/siren.py</code> · Every quarter second, an FFT measures power inside the siren band against power outside it. Above 4× for 0.8 seconds counts as a siren, which ends the current green safely and holds green on that road.</p></div>
+<pre><code>power = np.abs(np.fft.rfft(window * np.hanning(len(window)))) ** 2
+freqs = np.fft.rfftfreq(len(window), 1 / rate)
+inside = (freqs &gt;= 600) &amp; (freqs &lt;= 1600)
+ratio = power[inside].mean() / power[~inside].mean()
+# ratio &gt;= 4.0 for 0.8 s in a row -&gt; controller.emergency(road)</code></pre>
+      </li>
+    </ol>
+
+    <div class="two">
+      <div class="card">
+        <h3>Project layout</h3>
+<pre class="tree"><code>traffic/
+  config.py      every tunable number
+  detector.py    OpenCV background subtraction
+  tracker.py     centroid tracking, line counting
+  signal.py      green times, phases, emergencies
+  siren.py       FFT siren detection
+  junction.py    runs it all on four videos
+  cli.py         python -m traffic …
+api/index.py     FastAPI, served on Vercel
+tests/           21 pytest tests
+scripts/make_samples.py</code></pre>
+      </div>
+      <div class="card">
+        <h3>Run it yourself</h3>
+<pre><code>pip install -r requirements.txt
+python scripts/make_samples.py
+python -m traffic plan 24 14 10 2
+python -m traffic count samples/north.mp4 --show
+python -m traffic junction \
+  --north samples/north.mp4 --east samples/east.mp4 \
+  --south samples/south.mp4 --west samples/west.mp4 \
+  --siren samples/siren_east.wav --siren-road east \
+  --out output/junction.mp4 --json output/results.json
+pytest</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="block limits" aria-labelledby="lim-h">
+    <h2 id="lim-h">Limits and next steps</h2>
+    <ul>
+      <li>Background subtraction struggles at night, in rain, and with shadows that move.</li>
+      <li>Vehicles bumper to bumper merge into one shape, so jams are undercounted, which is when counts matter most.</li>
+      <li>Counting passing vehicles measures flow, not how long the queue is or how long people have waited.</li>
+      <li>One junction on its own; it does not coordinate with the next signal.</li>
+    </ul>
+    <p class="hint">Next: a trained detector such as YOLO for jams and night, queue length as the input, and linked junctions. A pilot would compare average wait and ambulance clearance time against the fixed timer at one junction.</p>
+  </section>
+</main>
+
+<footer class="foot wrap">
+  <p>Rebuilt by Muhammad Fatheen. Original project by a team of four, presented at Universiti Sains Islam Malaysia, Kuala Lumpur, 2025.</p>
+</footer>
+<!--/BODY-->
+<script src="app.js"></script>
+</body>
+</html>
